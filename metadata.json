@@ -1,0 +1,6 @@
+{
+  "name": "IndusStock",
+  "description": "Application de Gestion des Stocks et du Parc Informatique avec suivi des seuils, alertes critiques, licences logiciels et interventions de maintenance.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
