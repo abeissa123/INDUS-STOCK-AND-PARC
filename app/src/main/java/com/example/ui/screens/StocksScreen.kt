@@ -128,7 +128,7 @@ fun StocksScreen(
             article = selectedArticleForEdit,
             onDismiss = { showAddDialog = false },
             onSave = { ref, des, cat, unit, threshold, initialStock, price ->
-                if (selectedArticleForEdit == null) {
+                if (selectedArticleForEdit == null || selectedArticleForEdit!!.id == 0L) {
                     viewModel.addArticle(ref, des, cat, unit, threshold, initialStock, price)
                 } else {
                     viewModel.updateArticle(
@@ -197,6 +197,15 @@ fun CatalogueTab(
         articles.map { ScannableItem(it.reference, it.designation, it.categorie) }
     }
 
+    // Check if searchQuery matches exactly a single reference to show identification/actions HUD banner
+    val exactMatchedArticle = remember(articles, searchQuery) {
+        if (searchQuery.isNotBlank()) {
+            articles.find { it.reference.equals(searchQuery.trim(), ignoreCase = true) }
+        } else {
+            null
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -255,6 +264,131 @@ fun CatalogueTab(
                                 expanded = false
                             }
                         )
+                    }
+                }
+            }
+        }
+
+        // Camera identification banner or Unrecognized code banner
+        if (exactMatchedArticle != null) {
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
+                ),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Article Identifié par Scan !",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                        Text(
+                            text = "${exactMatchedArticle.designation} (${exactMatchedArticle.reference})",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Text(
+                            text = "Stock actuel : ${exactMatchedArticle.quantiteStock} ${exactMatchedArticle.unite}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                        )
+                    }
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = { onRecordMovement(exactMatchedArticle) },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                            modifier = Modifier.height(36.dp)
+                        ) {
+                            Icon(Icons.Default.SwapHoriz, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Mouvement", style = MaterialTheme.typography.labelSmall)
+                        }
+                        IconButton(
+                            onClick = { viewModel.articleSearchQuery.value = "" },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(Icons.Default.Clear, contentDescription = "Effacer", tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                        }
+                    }
+                }
+            }
+        } else if (searchQuery.isNotBlank() && filteredArticles.isEmpty()) {
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.85f)
+                ),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Référence inconnue : $searchQuery",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                    Text(
+                        text = "Aucun article dans votre stock ne correspond à ce code-barres. Souhaitez-vous créer un nouvel article avec cette référence ?",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.9f)
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        if (canModify) {
+                            Button(
+                                onClick = {
+                                    // Open Add Article Dialog with prefilled scanned reference
+                                    onEditArticle(Article(
+                                        id = 0,
+                                        reference = searchQuery.trim(),
+                                        designation = "",
+                                        categorie = "Matière première",
+                                        unite = "pièces",
+                                        seuilAlerte = 5,
+                                        quantiteStock = 0,
+                                        prixUnitaire = 0.0
+                                    ))
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                modifier = Modifier.height(36.dp)
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Créer l'article", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
+                            }
+                        }
+                        OutlinedButton(
+                            onClick = { viewModel.articleSearchQuery.value = "" },
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.height(36.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onErrorContainer)
+                        ) {
+                            Text("Annuler", style = MaterialTheme.typography.labelSmall)
+                        }
                     }
                 }
             }
@@ -534,9 +668,24 @@ fun AddEditArticleDialog(
     var catExpanded by remember { mutableStateOf(false) }
     val categories = listOf("Matière première", "Produit fini", "Pièce de rechange", "Consommable")
 
+    var showScanDialogForRef by remember { mutableStateOf(false) }
+
+    if (showScanDialogForRef) {
+        BarcodeScannerDialog(
+            title = "Scanner le code-barres de l'article",
+            subtitle = "Pointez la caméra vers le code-barres ou QR code pour remplir la référence",
+            scannableItems = emptyList(),
+            onDismiss = { showScanDialogForRef = false },
+            onScanResult = { result ->
+                ref = result
+                showScanDialogForRef = false
+            }
+        )
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (article == null) "Ajouter un article" else "Modifier l'article", fontWeight = FontWeight.Bold) },
+        title = { Text(if (article == null || article.id == 0L) "Ajouter un article" else "Modifier l'article", fontWeight = FontWeight.Bold) },
         text = {
             Column(
                 modifier = Modifier
@@ -549,6 +698,15 @@ fun AddEditArticleDialog(
                     onValueChange = { ref = it },
                     label = { Text("Référence (ex: MP-AC-100)") },
                     singleLine = true,
+                    trailingIcon = {
+                        IconButton(onClick = { showScanDialogForRef = true }) {
+                            Icon(
+                                imageVector = Icons.Default.QrCodeScanner,
+                                contentDescription = "Scanner le code-barres",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth()
                 )
 

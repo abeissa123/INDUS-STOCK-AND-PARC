@@ -159,7 +159,7 @@ fun ITAssetsScreen(
             equipement = selectedEquipementForEdit,
             onDismiss = { showEquipementDialog = false },
             onSave = { type, brand, model, serial, date, value, status, location, user ->
-                if (selectedEquipementForEdit == null) {
+                if (selectedEquipementForEdit == null || selectedEquipementForEdit!!.id == 0L) {
                     viewModel.addEquipement(type, brand, model, serial, date, value, status, location, user)
                 } else {
                     viewModel.updateEquipement(
@@ -248,6 +248,15 @@ fun EquipementsTab(
         equipements.map { ScannableItem(it.numeroSerie, "${it.type} ${it.marque} ${it.modele}", "S/N: ${it.numeroSerie}") }
     }
 
+    // Check if searchQuery matches exactly a single device S/N to show identification/actions HUD banner
+    val exactMatchedEquipement = remember(equipements, searchQuery) {
+        if (searchQuery.isNotBlank()) {
+            equipements.find { it.numeroSerie.equals(searchQuery.trim(), ignoreCase = true) }
+        } else {
+            null
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -305,6 +314,133 @@ fun EquipementsTab(
                                 expanded = false
                             }
                         )
+                    }
+                }
+            }
+        }
+
+        // Camera identification banner or Unrecognized serial number banner
+        if (exactMatchedEquipement != null) {
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
+                ),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Matériel Identifié par Scan !",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                        Text(
+                            text = "${exactMatchedEquipement.type} ${exactMatchedEquipement.marque} ${exactMatchedEquipement.modele}",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Text(
+                            text = "S/N: ${exactMatchedEquipement.numeroSerie} • Statut: ${exactMatchedEquipement.statut}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                        )
+                    }
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = { onEditEquipement(exactMatchedEquipement) },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                            modifier = Modifier.height(36.dp)
+                        ) {
+                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Modifier/Voir", style = MaterialTheme.typography.labelSmall)
+                        }
+                        IconButton(
+                            onClick = { viewModel.equipmentSearchQuery.value = "" },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(Icons.Default.Clear, contentDescription = "Effacer", tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                        }
+                    }
+                }
+            }
+        } else if (searchQuery.isNotBlank() && filteredEquipements.isEmpty()) {
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.85f)
+                ),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "S/N inconnu : $searchQuery",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                    Text(
+                        text = "Aucun équipement matériel de votre parc IT ne correspond à ce code-barres / S/N. Souhaitez-vous l'ajouter au parc ?",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.9f)
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        if (canModify) {
+                            Button(
+                                onClick = {
+                                    // Open Add Equipment Dialog with prefilled scanned S/N
+                                    onEditEquipement(Equipement(
+                                        id = 0,
+                                        type = "Ordinateur portable",
+                                        marque = "",
+                                        modele = "",
+                                        numeroSerie = searchQuery.trim(),
+                                        dateAchat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()),
+                                        valeurAchat = 0.0,
+                                        statut = "En service",
+                                        localisation = "",
+                                        utilisateurAffecte = ""
+                                    ))
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                modifier = Modifier.height(36.dp)
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Ajouter au parc", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
+                            }
+                        }
+                        OutlinedButton(
+                            onClick = { viewModel.equipmentSearchQuery.value = "" },
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.height(36.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onErrorContainer)
+                        ) {
+                            Text("Annuler", style = MaterialTheme.typography.labelSmall)
+                        }
                     }
                 }
             }
@@ -672,9 +808,24 @@ fun AddEditEquipementDialog(
     val typesList = listOf("Ordinateur portable", "Ordinateur de bureau", "Serveur", "Imprimante", "Routeur", "Switch", "Autre")
     val statusList = listOf("En service", "En panne", "En réparation", "Hors service")
 
+    var showScanDialogForSerial by remember { mutableStateOf(false) }
+
+    if (showScanDialogForSerial) {
+        BarcodeScannerDialog(
+            title = "Scanner le S/N de l'équipement",
+            subtitle = "Pointez la caméra vers le code-barres ou QR code de l'équipement",
+            scannableItems = emptyList(),
+            onDismiss = { showScanDialogForSerial = false },
+            onScanResult = { result ->
+                serial = result
+                showScanDialogForSerial = false
+            }
+        )
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (equipement == null) "Ajouter un Équipement" else "Modifier Équipement", fontWeight = FontWeight.Bold) },
+        title = { Text(if (equipement == null || equipement.id == 0L) "Ajouter un Équipement" else "Modifier Équipement", fontWeight = FontWeight.Bold) },
         text = {
             Column(
                 modifier = Modifier
@@ -724,6 +875,15 @@ fun AddEditEquipementDialog(
                     onValueChange = { serial = it },
                     label = { Text("Numéro de série / Code S/N") },
                     singleLine = true,
+                    trailingIcon = {
+                        IconButton(onClick = { showScanDialogForSerial = true }) {
+                            Icon(
+                                imageVector = Icons.Default.QrCodeScanner,
+                                contentDescription = "Scanner le S/N",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth()
                 )
 
