@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -24,7 +25,12 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextAlign
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+
 import com.example.data.Equipement
 import com.example.data.Intervention
 import com.example.data.Licence
@@ -53,6 +59,9 @@ fun ITAssetsScreen(
     var showLicenceDialog by remember { mutableStateOf(false) }
     var showInterventionDialog by remember { mutableStateOf(false) }
     var selectedEquipementForIntervention by remember { mutableStateOf<Equipement?>(null) }
+    var showQrDialog by remember { mutableStateOf(false) }
+    var selectedEquipementForQr by remember { mutableStateOf<Equipement?>(null) }
+
 
     Column(
         modifier = modifier
@@ -89,22 +98,26 @@ fun ITAssetsScreen(
                                 selectedEquipementForEdit = null
                                 showEquipementDialog = true
                             },
-                            shape = RoundedCornerShape(10.dp)
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.height(36.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
                         ) {
-                            Icon(Icons.Default.Add, contentDescription = null)
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Ajouter Matériel", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
+                            Text("Ajouter Matériel", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, fontSize = 11.sp))
                         }
                     }
                     1 -> {
                         Button(
                             onClick = { showLicenceDialog = true },
                             shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
+                            modifier = Modifier.height(36.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
                         ) {
-                            Icon(Icons.Default.Add, contentDescription = null)
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Nouvelle Licence", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
+                            Text("Nouvelle Licence", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, fontSize = 11.sp))
                         }
                     }
                     2 -> {
@@ -114,11 +127,13 @@ fun ITAssetsScreen(
                                 showInterventionDialog = true
                             },
                             shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE65100))
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE65100)),
+                            modifier = Modifier.height(36.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
                         ) {
-                            Icon(Icons.Default.Add, contentDescription = null)
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Saisir Interv.", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
+                            Text("Saisir Interv.", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, fontSize = 11.sp))
                         }
                     }
                 }
@@ -146,6 +161,10 @@ fun ITAssetsScreen(
                 onAddIntervention = { eq ->
                     selectedEquipementForIntervention = eq
                     showInterventionDialog = true
+                },
+                onShowQrCode = { eq ->
+                    selectedEquipementForQr = eq
+                    showQrDialog = true
                 }
             )
             1 -> LicencesTab(viewModel = viewModel, canModify = canModify)
@@ -159,7 +178,8 @@ fun ITAssetsScreen(
             equipement = selectedEquipementForEdit,
             onDismiss = { showEquipementDialog = false },
             onSave = { type, brand, model, serial, date, value, status, location, user ->
-                if (selectedEquipementForEdit == null || selectedEquipementForEdit!!.id == 0L) {
+                val isNew = selectedEquipementForEdit == null || selectedEquipementForEdit!!.id == 0L
+                if (isNew) {
                     viewModel.addEquipement(type, brand, model, serial, date, value, status, location, user)
                 } else {
                     viewModel.updateEquipement(
@@ -177,6 +197,23 @@ fun ITAssetsScreen(
                     )
                 }
                 showEquipementDialog = false
+
+                // If asset is assigned to a personnel, automatically pop the QR code dialog
+                if (user.trim().isNotBlank()) {
+                    selectedEquipementForQr = Equipement(
+                        id = selectedEquipementForEdit?.id ?: 0L,
+                        type = type,
+                        marque = brand,
+                        modele = model,
+                        numeroSerie = serial,
+                        dateAchat = date,
+                        valeurAchat = value,
+                        statut = status,
+                        localisation = location,
+                        utilisateurAffecte = user
+                    )
+                    showQrDialog = true
+                }
             },
             onDelete = { eq ->
                 viewModel.deleteEquipement(eq)
@@ -218,6 +255,15 @@ fun ITAssetsScreen(
             }
         )
     }
+
+    // --- Dialog: QR Code tracking of asset ---
+    if (showQrDialog && selectedEquipementForQr != null) {
+        EquipementAssignmentQrDialog(
+            eq = selectedEquipementForQr!!,
+            onDismiss = { showQrDialog = false }
+        )
+    }
+
 }
 
 @Composable
@@ -225,7 +271,8 @@ fun EquipementsTab(
     viewModel: MainViewModel,
     canModify: Boolean,
     onEditEquipement: (Equipement) -> Unit,
-    onAddIntervention: (Equipement) -> Unit
+    onAddIntervention: (Equipement) -> Unit,
+    onShowQrCode: (Equipement) -> Unit
 ) {
     val equipements by viewModel.allEquipements.collectAsStateWithLifecycle()
     val searchQuery by viewModel.equipmentSearchQuery.collectAsStateWithLifecycle()
@@ -298,11 +345,12 @@ fun EquipementsTab(
                 OutlinedButton(
                     onClick = { expanded = true },
                     modifier = Modifier.height(56.dp),
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp)
                 ) {
-                    Icon(Icons.Default.FilterList, contentDescription = null)
+                    Icon(Icons.Default.FilterList, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(statusFilter)
+                    Text(statusFilter, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp))
                 }
 
                 DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -462,7 +510,8 @@ fun EquipementsTab(
                         eq = eq,
                         canModify = canModify,
                         onEditEquipement = { onEditEquipement(eq) },
-                        onAddIntervention = { onAddIntervention(eq) }
+                        onAddIntervention = { onAddIntervention(eq) },
+                        onShowQrCode = { onShowQrCode(eq) }
                     )
                 }
             }
@@ -476,7 +525,12 @@ fun EquipementsTab(
             scannableItems = scannableItems,
             onDismiss = { showScanner = false },
             onScanResult = { result ->
-                viewModel.equipmentSearchQuery.value = result
+                val cleanResult = if (result.startsWith("TRACK_IT_ASSET:")) {
+                    result.removePrefix("TRACK_IT_ASSET:")
+                } else {
+                    result
+                }
+                viewModel.equipmentSearchQuery.value = cleanResult
                 showScanner = false
             }
         )
@@ -488,7 +542,8 @@ fun EquipementItemCard(
     eq: Equipement,
     canModify: Boolean,
     onEditEquipement: () -> Unit,
-    onAddIntervention: () -> Unit
+    onAddIntervention: () -> Unit,
+    onShowQrCode: () -> Unit
 ) {
     val statusColor = when (eq.statut) {
         "En service" -> Color(0xFF2E7D32)
@@ -521,9 +576,21 @@ fun EquipementItemCard(
                     )
                 }
 
-                if (canModify) {
-                    IconButton(onClick = onEditEquipement) {
-                        Icon(Icons.Default.Edit, contentDescription = "Edit", tint = MaterialTheme.colorScheme.primary)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    IconButton(onClick = onShowQrCode) {
+                        Icon(
+                            imageVector = Icons.Default.QrCode,
+                            contentDescription = "Code QR de suivi",
+                            tint = MaterialTheme.colorScheme.secondary
+                        )
+                    }
+                    if (canModify) {
+                        IconButton(onClick = onEditEquipement) {
+                            Icon(Icons.Default.Edit, contentDescription = "Edit", tint = MaterialTheme.colorScheme.primary)
+                        }
                     }
                 }
             }
@@ -536,16 +603,40 @@ fun EquipementItemCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Location & Owner
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Icon(Icons.Default.Place, contentDescription = null, size = 16.dp, tint = Color.Gray)
-                    Text(
-                        text = "${eq.localisation} (${eq.utilisateurAffecte})",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
-                    )
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(Icons.Default.Place, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.Gray)
+                        Text(
+                            text = eq.localisation.ifBlank { "Sans localisation" },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                        )
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (eq.utilisateurAffecte.isNotBlank()) Icons.Default.Person else Icons.Default.PersonOutline,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = if (eq.utilisateurAffecte.isNotBlank()) MaterialTheme.colorScheme.primary else Color.Gray
+                        )
+                        Text(
+                            text = if (eq.utilisateurAffecte.isNotBlank()) {
+                                "Affecté à : ${eq.utilisateurAffecte}"
+                            } else {
+                                "Non affecté (En stock)"
+                            },
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontWeight = if (eq.utilisateurAffecte.isNotBlank()) FontWeight.Bold else FontWeight.Normal
+                            ),
+                            color = if (eq.utilisateurAffecte.isNotBlank()) MaterialTheme.colorScheme.primary else Color.Gray
+                        )
+                    }
                 }
 
                 // Status Badge
@@ -562,6 +653,7 @@ fun EquipementItemCard(
                 }
             }
 
+
             if (canModify && (eq.statut == "En panne" || eq.statut == "En réparation")) {
                 Spacer(modifier = Modifier.height(12.dp))
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -569,13 +661,14 @@ fun EquipementItemCard(
 
                 Button(
                     onClick = onAddIntervention,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().height(38.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE65100)),
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
                 ) {
-                    Icon(Icons.Default.Build, contentDescription = null)
+                    Icon(Icons.Default.Build, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Créer une intervention de réparation", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
+                    Text("Créer une intervention de réparation", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, fontSize = 12.sp))
                 }
             }
         }
@@ -949,23 +1042,32 @@ fun AddEditEquipementDialog(
                     if (brand.isNotBlank() && model.isNotBlank() && serial.isNotBlank()) {
                         onSave(type, brand, model, serial, date, value, status, location, user)
                     }
-                }
+                },
+                modifier = Modifier.height(36.dp),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
+                shape = RoundedCornerShape(8.dp)
             ) {
-                Text("Enregistrer")
+                Text("Enregistrer", style = MaterialTheme.typography.labelMedium)
             }
         },
         dismissButton = {
-            Row {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (equipement != null) {
                     TextButton(
                         onClick = { onDelete(equipement) },
-                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                        modifier = Modifier.height(36.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
                     ) {
-                        Text("Supprimer")
+                        Text("Supprimer", style = MaterialTheme.typography.labelMedium)
                     }
                 }
-                TextButton(onClick = onDismiss) {
-                    Text("Annuler")
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.height(36.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                ) {
+                    Text("Annuler", style = MaterialTheme.typography.labelMedium)
                 }
             }
         }
@@ -1097,14 +1199,21 @@ fun AddLicenceDialog(
                     if (name.isNotBlank()) {
                         onSave(name, selectedEquipementId, selectedEquipementName, dateAchat, dateExp, count, typeLicence)
                     }
-                }
+                },
+                modifier = Modifier.height(36.dp),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
+                shape = RoundedCornerShape(8.dp)
             ) {
-                Text("Ajouter")
+                Text("Ajouter", style = MaterialTheme.typography.labelMedium)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Annuler")
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.height(36.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+            ) {
+                Text("Annuler", style = MaterialTheme.typography.labelMedium)
             }
         }
     )
@@ -1224,14 +1333,21 @@ fun AddInterventionDialog(
                             statusUpdate
                         )
                     }
-                }
+                },
+                modifier = Modifier.height(36.dp),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
+                shape = RoundedCornerShape(8.dp)
             ) {
-                Text("Valider l'Intervention")
+                Text("Valider l'Intervention", style = MaterialTheme.typography.labelMedium)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Annuler")
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.height(36.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+            ) {
+                Text("Annuler", style = MaterialTheme.typography.labelMedium)
             }
         }
     )
@@ -1241,3 +1357,502 @@ fun AddInterventionDialog(
 private fun Icon(imageVector: androidx.compose.ui.graphics.vector.ImageVector, contentDescription: String?, size: androidx.compose.ui.unit.Dp, tint: Color) {
     Icon(imageVector = imageVector, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(size))
 }
+
+@Composable
+fun EquipementAssignmentQrDialog(
+    eq: Equipement,
+    onDismiss: () -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val qrContent = "TRACK_IT_ASSET:${eq.numeroSerie}"
+    val qrBitmap = remember(eq) { generateQrCode(qrContent) }
+    
+    // State to toggle between QR Code only and full asset label preview
+    var showStickerPreview by remember { mutableStateOf(false) }
+    
+    // Remember the sticker bitmap so we only generate it once
+    val stickerBitmap = remember(eq, qrBitmap) {
+        if (qrBitmap != null) {
+            generateStickerBitmap(eq, qrBitmap)
+        } else {
+            null
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.QrCode,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp)
+                )
+                Text(
+                    text = "Suivi & Code QR d'Affectation",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = "Ce code QR permet de faire le suivi de l'équipement durant son utilisation. Vous pouvez l'imprimer, l'enregistrer ou le partager pour le coller sur le matériel.",
+                    style = MaterialTheme.typography.bodySmall,
+                    textAlign = TextAlign.Center,
+                    color = Color.Gray
+                )
+
+                // Segmented toggle to switch preview modes
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    val activeColor = MaterialTheme.colorScheme.primaryContainer
+                    val inactiveColor = Color.Transparent
+                    
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(if (!showStickerPreview) activeColor else inactiveColor)
+                            .clickable { showStickerPreview = false }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Code QR Seul",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = if (!showStickerPreview) FontWeight.Bold else FontWeight.Normal,
+                                color = if (!showStickerPreview) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        )
+                    }
+                    
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(if (showStickerPreview) activeColor else inactiveColor)
+                            .clickable { showStickerPreview = true }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Étiquette Complète",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = if (showStickerPreview) FontWeight.Bold else FontWeight.Normal,
+                                color = if (showStickerPreview) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        )
+                    }
+                }
+
+                // Render the selected preview (QR bitmap or complete sticker)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp)
+                        .background(Color.White, RoundedCornerShape(12.dp))
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(12.dp))
+                        .padding(12.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (showStickerPreview) {
+                        if (stickerBitmap != null) {
+                            Image(
+                                bitmap = stickerBitmap.asImageBitmap(),
+                                contentDescription = "Aperçu de l'étiquette d'équipement complète",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                            )
+                        } else {
+                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                        }
+                    } else {
+                        if (qrBitmap != null) {
+                            Image(
+                                bitmap = qrBitmap.asImageBitmap(),
+                                contentDescription = "QR Code de suivi de l'équipement",
+                                modifier = Modifier.size(160.dp)
+                            )
+                        } else {
+                            CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                }
+
+                // Quick Action Buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    // Save to Gallery
+                    Button(
+                        onClick = {
+                            if (showStickerPreview && stickerBitmap != null) {
+                                saveQrCodeToGallery(context, eq, stickerBitmap, isSticker = true)
+                            } else if (qrBitmap != null) {
+                                saveQrCodeToGallery(context, eq, qrBitmap, isSticker = false)
+                            }
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(36.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        ),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Save,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Enregistrer",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                            maxLines = 1
+                        )
+                    }
+
+                    // Share
+                    Button(
+                        onClick = {
+                            if (showStickerPreview && stickerBitmap != null) {
+                                shareQrCode(context, eq, stickerBitmap, isSticker = true)
+                            } else if (qrBitmap != null) {
+                                shareQrCode(context, eq, qrBitmap, isSticker = false)
+                            }
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(36.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.secondary
+                        ),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Partager",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                            maxLines = 1
+                        )
+                    }
+
+                    // Print
+                    Button(
+                        onClick = {
+                            if (showStickerPreview && stickerBitmap != null) {
+                                printQrCode(context, eq, stickerBitmap, isSticker = true)
+                            } else if (qrBitmap != null) {
+                                printQrCode(context, eq, qrBitmap, isSticker = false)
+                            }
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(36.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.tertiary
+                        ),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Print,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Imprimer",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                            maxLines = 1
+                        )
+                    }
+                }
+
+                // Assignment details
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "Matériel : ${eq.type} ${eq.marque} ${eq.modele}",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Text(
+                            text = "S/N : ${eq.numeroSerie}",
+                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                        
+                        Text(
+                            text = "Personnel Affecté :",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.Gray
+                        )
+                        Text(
+                            text = if (eq.utilisateurAffecte.isNotBlank()) eq.utilisateurAffecte else "Non affecté (En stock)",
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = if (eq.utilisateurAffecte.isNotBlank()) MaterialTheme.colorScheme.primary else Color.Gray
+                            )
+                        )
+                        
+                        if (eq.localisation.isNotBlank()) {
+                            Text(
+                                text = "Localisation : ${eq.localisation}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onDismiss,
+                modifier = Modifier.height(36.dp),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text("Fermer", style = MaterialTheme.typography.labelMedium)
+            }
+        }
+    )
+}
+
+/**
+ * Generates a beautiful sticker layout combining the QR Code with the equipment information text.
+ */
+fun generateStickerBitmap(eq: Equipement, qrBitmap: android.graphics.Bitmap): android.graphics.Bitmap {
+    val stickerWidth = 600
+    val stickerHeight = 350
+    val bitmap = android.graphics.Bitmap.createBitmap(stickerWidth, stickerHeight, android.graphics.Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(bitmap)
+    
+    // Fill white background
+    val bgPaint = android.graphics.Paint().apply {
+        color = android.graphics.Color.WHITE
+        style = android.graphics.Paint.Style.FILL
+    }
+    canvas.drawRect(0f, 0f, stickerWidth.toFloat(), stickerHeight.toFloat(), bgPaint)
+    
+    // Draw outer border
+    val borderPaint = android.graphics.Paint().apply {
+        color = android.graphics.Color.DKGRAY
+        style = android.graphics.Paint.Style.STROKE
+        strokeWidth = 6f
+    }
+    canvas.drawRect(8f, 8f, (stickerWidth - 8).toFloat(), (stickerHeight - 8).toFloat(), borderPaint)
+    
+    // Draw a divider line
+    val dividerPaint = android.graphics.Paint().apply {
+        color = android.graphics.Color.LTGRAY
+        strokeWidth = 3f
+    }
+    canvas.drawLine(320f, 20f, 320f, 330f, dividerPaint)
+    
+    // Draw the QR Code scaled on the left side
+    val srcRect = android.graphics.Rect(0, 0, qrBitmap.width, qrBitmap.height)
+    val destRect = android.graphics.Rect(20, 35, 300, 315)
+    canvas.drawBitmap(qrBitmap, srcRect, destRect, null)
+    
+    // Draw Text on the right side
+    val titlePaint = android.graphics.Paint().apply {
+        color = android.graphics.Color.BLACK
+        textSize = 24f
+        isFakeBoldText = true
+        isAntiAlias = true
+    }
+    val textPaint = android.graphics.Paint().apply {
+        color = android.graphics.Color.BLACK
+        textSize = 18f
+        isAntiAlias = true
+    }
+    val boldPaint = android.graphics.Paint().apply {
+        color = android.graphics.Color.BLACK
+        textSize = 18f
+        isFakeBoldText = true
+        isAntiAlias = true
+    }
+    val smallPaint = android.graphics.Paint().apply {
+        color = android.graphics.Color.GRAY
+        textSize = 14f
+        isAntiAlias = true
+    }
+    
+    var yPos = 50f
+    canvas.drawText("SUIVI MATÉRIEL", 340f, yPos, titlePaint)
+    
+    yPos += 45f
+    canvas.drawText("Type : ${eq.type}", 340f, yPos, textPaint)
+    
+    yPos += 30f
+    canvas.drawText("Modèle : ${eq.marque} ${eq.modele}", 340f, yPos, textPaint)
+    
+    yPos += 30f
+    canvas.drawText("S/N : ${eq.numeroSerie}", 340f, yPos, boldPaint)
+    
+    yPos += 45f
+    canvas.drawText("AFFECTÉ À :", 340f, yPos, smallPaint)
+    
+    yPos += 25f
+    val userText = if (eq.utilisateurAffecte.isNotBlank()) eq.utilisateurAffecte else "Non affecté (En stock)"
+    canvas.drawText(userText, 340f, yPos, titlePaint.apply { textSize = 20f })
+    
+    if (eq.localisation.isNotBlank()) {
+        yPos += 35f
+        canvas.drawText("Loc : ${eq.localisation}", 340f, yPos, textPaint)
+    }
+    
+    return bitmap
+}
+
+/**
+ * Saves a Bitmap (QR Code or complete label sticker) to the device's public photo gallery.
+ */
+fun saveQrCodeToGallery(context: android.content.Context, eq: Equipement, bitmap: android.graphics.Bitmap, isSticker: Boolean) {
+    try {
+        val typeLabel = if (isSticker) "Etiquette" else "QR"
+        val filename = "${typeLabel}_Suivi_${eq.numeroSerie}_${System.currentTimeMillis()}.png"
+        val resolver = context.contentResolver
+        val contentValues = android.content.ContentValues().apply {
+            put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, filename)
+            put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "image/png")
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/ITAssets_QR")
+            }
+        }
+        val uri = resolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+        if (uri != null) {
+            resolver.openOutputStream(uri).use { outputStream ->
+                if (outputStream != null) {
+                    bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, outputStream)
+                    val message = if (isSticker) "Étiquette enregistrée dans l'album 'ITAssets_QR' !" else "Code QR enregistré dans l'album 'ITAssets_QR' !"
+                    android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
+                } else {
+                    android.widget.Toast.makeText(context, "Impossible d'enregistrer l'image", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        } else {
+            android.widget.Toast.makeText(context, "Erreur lors de la création du fichier", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+        android.widget.Toast.makeText(context, "Erreur : ${e.localizedMessage}", android.widget.Toast.LENGTH_SHORT).show()
+    }
+}
+
+/**
+ * Shares a Bitmap (QR Code or complete label sticker) using FileProvider.
+ */
+fun shareQrCode(context: android.content.Context, eq: Equipement, bitmap: android.graphics.Bitmap, isSticker: Boolean) {
+    try {
+        val cacheDir = context.cacheDir
+        val imagesDir = java.io.File(cacheDir, "images").apply { mkdirs() }
+        val prefix = if (isSticker) "Etiquette" else "QR"
+        val file = java.io.File(imagesDir, "${prefix}_${eq.numeroSerie}.png")
+        
+        java.io.FileOutputStream(file).use { stream ->
+            bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, stream)
+        }
+
+        val uri = androidx.core.content.FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            file
+        )
+
+        val descriptionText = if (isSticker) {
+            "Voici l'étiquette de suivi d'affectation pour ${eq.type} ${eq.marque} (${eq.modele}) affecté à ${eq.utilisateurAffecte}."
+        } else {
+            "Voici le code QR de suivi d'affectation pour l'équipement ${eq.type} ${eq.marque}."
+        }
+
+        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+            type = "image/png"
+            putExtra(android.content.Intent.EXTRA_STREAM, uri)
+            putExtra(android.content.Intent.EXTRA_SUBJECT, "Code QR de suivi - ${eq.type} ${eq.marque}")
+            putExtra(android.content.Intent.EXTRA_TEXT, descriptionText)
+            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(android.content.Intent.createChooser(intent, "Partager via"))
+    } catch (e: Exception) {
+        e.printStackTrace()
+        android.widget.Toast.makeText(context, "Erreur de partage : ${e.localizedMessage}", android.widget.Toast.LENGTH_SHORT).show()
+    }
+}
+
+/**
+ * Directly prints the Bitmap (QR Code or complete label sticker) using Android Print Framework.
+ */
+fun printQrCode(context: android.content.Context, eq: Equipement, bitmap: android.graphics.Bitmap, isSticker: Boolean) {
+    try {
+        val printHelper = androidx.print.PrintHelper(context).apply {
+            scaleMode = androidx.print.PrintHelper.SCALE_MODE_FIT
+        }
+        val label = if (isSticker) "Etiquette-Asset-${eq.numeroSerie}" else "QR-Asset-${eq.numeroSerie}"
+        printHelper.printBitmap(label, bitmap)
+    } catch (e: Exception) {
+        e.printStackTrace()
+        android.widget.Toast.makeText(context, "Erreur d'impression : ${e.localizedMessage}", android.widget.Toast.LENGTH_SHORT).show()
+    }
+}
+
+/**
+ * Generates a QR Code Bitmap using ZXing.
+ * Fully qualified names are used for Color and Bitmap to prevent import collision.
+ */
+fun generateQrCode(content: String, size: Int = 512): android.graphics.Bitmap? {
+    return try {
+        val writer = com.google.zxing.qrcode.QRCodeWriter()
+        val bitMatrix = writer.encode(content, com.google.zxing.BarcodeFormat.QR_CODE, size, size)
+        val width = bitMatrix.width
+        val height = bitMatrix.height
+        val bmp = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.RGB_565)
+        for (x in 0 until width) {
+            for (y in 0 until height) {
+                bmp.setPixel(
+                    x, 
+                    y, 
+                    if (bitMatrix.get(x, y)) android.graphics.Color.BLACK else android.graphics.Color.WHITE
+                )
+            }
+        }
+        bmp
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
+    }
+}
+

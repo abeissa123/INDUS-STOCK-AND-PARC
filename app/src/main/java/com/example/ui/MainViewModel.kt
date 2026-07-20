@@ -50,6 +50,7 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
     val equipmentStatusFilter = MutableStateFlow("Tous")
 
     val supplierSearchQuery = MutableStateFlow("")
+    val logSearchQuery = MutableStateFlow("")
 
     // Login Method
     fun login(email: String, pssw: String, onResult: (Boolean, String?) -> Unit) {
@@ -439,6 +440,17 @@ class MainViewModel(private val repository: AppRepository) : ViewModel() {
             val shareIntent = Intent.createChooser(sendIntent, "Exporter le rapport via :")
             shareIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(shareIntent)
+        }
+    }
+
+    fun clearAllLogs() {
+        viewModelScope.launch {
+            val opName = _currentUser.value?.nom ?: "Système"
+            repository.deleteAllLogs()
+            repository.insertLog(ActionLog(
+                utilisateurNom = opName,
+                action = "Le journal d'actions a été vidé par l'utilisateur."
+            ))
         }
     }
 }

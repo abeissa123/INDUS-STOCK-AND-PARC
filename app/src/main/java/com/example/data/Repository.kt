@@ -109,4 +109,5 @@ class AppRepository(private val database: AppDatabase) {
 
     // Logs
     suspend fun insertLog(log: ActionLog): Long = logDao.insertLog(log)
+    suspend fun deleteAllLogs() = logDao.deleteAllLogs()
 }

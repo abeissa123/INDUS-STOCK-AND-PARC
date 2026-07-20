@@ -112,4 +112,7 @@ interface ActionLogDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLog(log: ActionLog): Long
+
+    @Query("DELETE FROM journal_actions")
+    suspend fun deleteAllLogs()
 }
